@@ -13,12 +13,13 @@ class App(QMainWindow) :
 
         # info
         self.title = "DADUINO AI CAR"        
-        self.ip = "192.168.137.237"
+        self.ip = "192.168.137.70"
         self.stream = urlopen("http://" + self.ip + ":81/stream")
         self.buffer = b''
         self.url = "http://" + self.ip + "/action?go="
         self.face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.is_haar = False
+        self.is_linetracing = False
 
         # timer
         self.timer = QTimer(self)
@@ -46,6 +47,7 @@ class App(QMainWindow) :
         self.btn_turn_left = QPushButton("Turn Left", self)
         self.btn_turn_right = QPushButton("Turn Right", self)
 
+        # UI
         self.initUI()
 
     # Aduino Video
@@ -63,12 +65,16 @@ class App(QMainWindow) :
             if self.is_haar :
                 self.haar()
 
+            # LineTracing ON/OFF
+            if self.is_linetracing :
+                self.lineTracing()
+
             h, w, c = self.img.shape
             self.qimg = QImage(self.img.data, w, h, w * c, QImage.Format_BGR888)
             self.label.setPixmap(QPixmap.fromImage(self.qimg))
 
     # Haar Face
-    def haar(self) :        
+    def haar(self) :
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         faces = self.face_detector.detectMultiScale(gray, scaleFactor = 1.5, minNeighbors = 2)
         
@@ -77,12 +83,47 @@ class App(QMainWindow) :
             cv2.rectangle(self.img, (x, y), (x + w, y + h), (b, g, r), 2)
             cv2.putText(self.img, "Face", (x, y - 5), cv2.FONT_HERSHEY_PLAIN, 1.5, (b, g, r), 2)
 
-    # Haar Face ON/OFF
+    # (PyQt) Haar Face ON/OFF
     def toggle_haar(self) :
         if self.is_haar :
             self.is_haar = False
         else :
             self.is_haar = True
+
+    # LineTracing
+    def lineTracing(self) :
+        height, width, _ = self.img.shape
+        self.img = self.img[height // 4:, :]
+        
+        lower_bound = np.array([0, 0, 0])
+        upper_bound = np.array([255, 255, 80])
+        mask = cv2.inRange(self.img, lower_bound, upper_bound)
+
+        M = cv2.moments(mask)
+        if M["m00"] != 0:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+        else:
+            cX, cY = 0, 0
+
+        center_offset = width // 2 - cX
+
+        cv2.circle(self.img, (cX, cY), 10, (0, 255, 0), -1)
+
+        if center_offset > -100 :
+            urlopen(self.url + "right")
+        elif center_offset < 100 :
+            urlopen(self.url + "left")
+        else :
+            urlopen(self.url + "forward")
+
+    # (PyQt) LineTracing ON/OFF
+    def toggle_lineTracing(self) :
+        if self.is_linetracing :
+            self.is_linetracing = False
+            urlopen(self.url + "stop")
+        else :
+            self.is_linetracing = True
 
     # UI
     def initUI(self) :        
@@ -118,6 +159,7 @@ class App(QMainWindow) :
         self.btn_speed_100.clicked.connect(self.speed100)
         self.btn_stop.clicked.connect(self.stop)
         self.btn_haar.clicked.connect(self.toggle_haar)
+        self.btn_linetracing.clicked.connect(self.toggle_lineTracing)
         
         # Layout
         video_box = QHBoxLayout()
@@ -158,7 +200,7 @@ class App(QMainWindow) :
         box = QVBoxLayout(self.widget)
         box.addLayout(vbox)
     
-    # 키보드 Press
+    # Keyboard Press
     def keyPressEvent(self, event):
         key = event.key()
         
@@ -187,7 +229,22 @@ class App(QMainWindow) :
         elif key == Qt.Key_5:
             self.speed100()
 
-    # 키보드 Release
+        # (Keyboard) Haar Face ON/OFF
+        if key == Qt.Key_H :
+            if self.is_haar :
+                self.is_haar = False
+            else :
+                self.is_haar = True
+        
+        # (Keyboard) LineTracing ON/OFF
+        if key == Qt.Key_L :
+            if self.is_linetracing :
+                self.is_linetracing = False
+                urlopen(self.url + "stop")
+            else :
+                self.is_linetracing = True
+
+    # Keyboard Release
     def keyReleaseEvent(self, event):
         self.stop()
 
