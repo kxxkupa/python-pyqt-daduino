@@ -76,24 +76,6 @@ class App(QMainWindow) :
             if self.is_linetracing :
                 self.lineTracing()
 
-            results = self.model(self.img)
-            detections = results.pandas().xyxy[0]
-            
-            if not detections.empty :
-                for _, detection in detections.iterrows() :
-                    x1, y1, x2, y2 = detection[["xmin", "ymin", "xmax", "ymax"]].astype(int).values
-                    yolo_label = detection["name"]
-                    yolo_conf = detection["confidence"]
-
-                    if "slow" in yolo_label and yolo_conf > 0.5 :
-                        urlopen(self.url + "stop")
-                    elif "speed50" in yolo_label and yolo_conf > 0.5 :
-                        urlopen(self.url + "forward")
-
-                    yolo_color = [int(c) for c in random.choices(range(256), k=3)]
-                    cv2.rectangle(self.img, (x1, y1), (x2, y2), yolo_color, 2)
-                    cv2.putText(self.img, f"{yolo_label} {yolo_conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, yolo_color, 2)
-
             h, w, c = self.img.shape
             self.qimg = QImage(self.img.data, w, h, w * c, QImage.Format_BGR888)
             self.label.setPixmap(QPixmap.fromImage(self.qimg))
@@ -135,12 +117,34 @@ class App(QMainWindow) :
 
         cv2.circle(self.img, (cX, cY), 10, (0, 255, 0), -1)
 
-        if center_offset > -100 :
-            urlopen(self.url + "right")
-        elif center_offset < 100 :
-            urlopen(self.url + "left")
+        if center_offset > 10 :
+            self.yoloMove("right")
+        elif center_offset < -10 :
+            self.yoloMove("left")
         else :
             urlopen(self.url + "forward")
+
+    # YOLO Move
+    def yoloMove(self, move) :
+        results = self.model(self.img)
+        detections = results.pandas().xyxy[0]
+        
+        if not detections.empty :
+            for _, detection in detections.iterrows() :
+                x1, y1, x2, y2 = detection[["xmin", "ymin", "xmax", "ymax"]].astype(int).values
+                self.yolo_label = detection["name"]
+                self.yolo_conf = detection["confidence"]
+
+                if "slow" in self.yolo_label and self.yolo_conf > 0.5 :
+                    urlopen(self.url + "stop")
+                elif "speed50" in self.yolo_label and self.yolo_conf > 0.5 :
+                    urlopen(self.url + move)
+
+                yolo_color = [int(c) for c in random.choices(range(256), k=3)]
+                cv2.rectangle(self.img, (x1, y1), (x2, y2), yolo_color, 2)
+                cv2.putText(self.img, f"{self.yolo_label} {self.yolo_conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, yolo_color, 2)
+        else :
+            urlopen(self.url + move)
 
     # (PyQt) LineTracing ON/OFF
     def toggle_lineTracing(self) :
