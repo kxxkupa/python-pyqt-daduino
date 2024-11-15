@@ -1,0 +1,5 @@
+train: /content/train/images
+val: /content/train/images
+
+nc: 2
+names: ['stop', 'speed50']

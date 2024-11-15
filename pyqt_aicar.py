@@ -2,6 +2,10 @@ import sys
 import cv2
 import random
 import numpy as np
+import torch
+import pathlib
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import QTimer, Qt
@@ -12,8 +16,8 @@ class App(QMainWindow) :
         super().__init__()
 
         # info
-        self.title = "DADUINO AI CAR"        
-        self.ip = "192.168.137.70"
+        self.title = "DADUINO AI CAR"
+        self.ip = "192.168.137.73"
         self.stream = urlopen("http://" + self.ip + ":81/stream")
         self.buffer = b''
         self.url = "http://" + self.ip + "/action?go="
@@ -31,14 +35,17 @@ class App(QMainWindow) :
         self.btn_haar = QPushButton("Haar", self)
         self.btn_linetracing = QPushButton("LineTracing", self)
 
+        # yolo
+        self.model = torch.hub.load("ultralytics/yolov5", "custom", path = "./best.pt")
+
         # Speed
-        self.btn_speed_40 = QPushButton("Speed 40", self)        
+        self.btn_speed_40 = QPushButton("Speed 40", self)
         self.btn_speed_50 = QPushButton("Speed 50", self)
         self.btn_speed_60 = QPushButton("Speed 60", self)
         self.btn_speed_80 = QPushButton("Speed 80", self)
         self.btn_speed_100 = QPushButton("Speed 100", self)
 
-        # Move        
+        # Move
         self.btn_stop = QPushButton("Stop", self)
         self.btn_left = QPushButton("Left", self)
         self.btn_right = QPushButton("Right", self)
@@ -60,7 +67,7 @@ class App(QMainWindow) :
             jpg = self.buffer[self.head : self.end + 2]
             self.buffer = self.buffer[self.end + 2 :]
             self.img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-
+            
             # Haar ON/OFF
             if self.is_haar :
                 self.haar()
@@ -68,6 +75,24 @@ class App(QMainWindow) :
             # LineTracing ON/OFF
             if self.is_linetracing :
                 self.lineTracing()
+
+            results = self.model(self.img)
+            detections = results.pandas().xyxy[0]
+            
+            if not detections.empty :
+                for _, detection in detections.iterrows() :
+                    x1, y1, x2, y2 = detection[["xmin", "ymin", "xmax", "ymax"]].astype(int).values
+                    yolo_label = detection["name"]
+                    yolo_conf = detection["confidence"]
+
+                    if "slow" in yolo_label and yolo_conf > 0.5 :
+                        urlopen(self.url + "stop")
+                    elif "speed50" in yolo_label and yolo_conf > 0.5 :
+                        urlopen(self.url + "forward")
+
+                    yolo_color = [int(c) for c in random.choices(range(256), k=3)]
+                    cv2.rectangle(self.img, (x1, y1), (x2, y2), yolo_color, 2)
+                    cv2.putText(self.img, f"{yolo_label} {yolo_conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, yolo_color, 2)
 
             h, w, c = self.img.shape
             self.qimg = QImage(self.img.data, w, h, w * c, QImage.Format_BGR888)
@@ -81,7 +106,7 @@ class App(QMainWindow) :
         for (x, y, w, h) in faces:
             b, g, r = random.sample(range(256), 3)
             cv2.rectangle(self.img, (x, y), (x + w, y + h), (b, g, r), 2)
-            cv2.putText(self.img, "Face", (x, y - 5), cv2.FONT_HERSHEY_PLAIN, 1.5, (b, g, r), 2)
+            cv2.putText(self.img, "Face", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (b, g, r), 2)
 
     # (PyQt) Haar Face ON/OFF
     def toggle_haar(self) :
@@ -126,7 +151,7 @@ class App(QMainWindow) :
             self.is_linetracing = True
 
     # UI
-    def initUI(self) :        
+    def initUI(self) :
         self.widget = QWidget()
         self.setWindowTitle(self.title)
         self.setCentralWidget(self.widget)
@@ -187,7 +212,7 @@ class App(QMainWindow) :
 
         hbox_05 = QHBoxLayout()
         hbox_05.addWidget(self.btn_left)
-        hbox_05.addWidget(self.btn_right)        
+        hbox_05.addWidget(self.btn_right)
 
         vbox = QVBoxLayout()
         vbox.addLayout(video_box)
