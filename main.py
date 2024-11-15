@@ -11,6 +11,10 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QHB
 from PyQt5.QtCore import QTimer, Qt
 from urllib.request import urlopen
 
+# Module
+from initializeUI import *
+from displayVideo import *
+
 class App(QMainWindow) :
     def __init__(self) :
         super().__init__()
@@ -28,7 +32,7 @@ class App(QMainWindow) :
         # timer
         self.timer = QTimer(self)
         self.timer.setInterval(1)
-        self.timer.timeout.connect(self.video)
+        self.timer.timeout.connect(lambda : displayVideo(self))
         self.timer.start()
 
         # Haar, LineTracing
@@ -38,47 +42,7 @@ class App(QMainWindow) :
         # yolo
         self.model = torch.hub.load("ultralytics/yolov5", "custom", path = "./best.pt")
 
-        # Speed
-        self.btn_speed_40 = QPushButton("Speed 40", self)
-        self.btn_speed_50 = QPushButton("Speed 50", self)
-        self.btn_speed_60 = QPushButton("Speed 60", self)
-        self.btn_speed_80 = QPushButton("Speed 80", self)
-        self.btn_speed_100 = QPushButton("Speed 100", self)
-
-        # Move
-        self.btn_stop = QPushButton("Stop", self)
-        self.btn_left = QPushButton("Left", self)
-        self.btn_right = QPushButton("Right", self)
-        self.btn_forward = QPushButton("Forward", self)
-        self.btn_backward = QPushButton("Backward", self)
-        self.btn_turn_left = QPushButton("Turn Left", self)
-        self.btn_turn_right = QPushButton("Turn Right", self)
-
-        # UI
-        self.initUI()
-
-    # Aduino Video
-    def video(self) :
-        self.buffer += self.stream.read(4096)
-        self.head = self.buffer.find(b'\xff\xd8')
-        self.end = self.buffer.find(b'\xff\xd9')
-        
-        if self.head > -1 and self.end > -1 :
-            jpg = self.buffer[self.head : self.end + 2]
-            self.buffer = self.buffer[self.end + 2 :]
-            self.img = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-            
-            # Haar ON/OFF
-            if self.is_haar :
-                self.haar()
-
-            # LineTracing ON/OFF
-            if self.is_linetracing :
-                self.lineTracing()
-
-            h, w, c = self.img.shape
-            self.qimg = QImage(self.img.data, w, h, w * c, QImage.Format_BGR888)
-            self.label.setPixmap(QPixmap.fromImage(self.qimg))
+        initializeUI(self)
 
     # Haar Face
     def haar(self) :
@@ -154,81 +118,6 @@ class App(QMainWindow) :
         else :
             self.is_linetracing = True
 
-    # UI
-    def initUI(self) :
-        self.widget = QWidget()
-        self.setWindowTitle(self.title)
-        self.setCentralWidget(self.widget)
-        self.setFixedSize(600, 700)
-        self.label = QLabel()
-        self.label.resize(600, 300)
-        self.label.setScaledContents(True)
-        
-        # Pressed
-        self.btn_left.pressed.connect(self.left)
-        self.btn_right.pressed.connect(self.right)
-        self.btn_forward.pressed.connect(self.forward)
-        self.btn_backward.pressed.connect(self.backward)
-        self.btn_turn_left.pressed.connect(self.turn_left)
-        self.btn_turn_right.pressed.connect(self.turn_right)
-
-        # Released
-        self.btn_left.released.connect(self.stop)
-        self.btn_right.released.connect(self.stop)
-        self.btn_forward.released.connect(self.stop)
-        self.btn_backward.released.connect(self.stop)
-        self.btn_turn_left.released.connect(self.stop)
-        self.btn_turn_right.released.connect(self.stop)
-
-        # Clicked
-        self.btn_speed_40.clicked.connect(self.speed40)
-        self.btn_speed_50.clicked.connect(self.speed50)
-        self.btn_speed_60.clicked.connect(self.speed60)
-        self.btn_speed_80.clicked.connect(self.speed80)
-        self.btn_speed_100.clicked.connect(self.speed100)
-        self.btn_stop.clicked.connect(self.stop)
-        self.btn_haar.clicked.connect(self.toggle_haar)
-        self.btn_linetracing.clicked.connect(self.toggle_lineTracing)
-        
-        # Layout
-        video_box = QHBoxLayout()
-        video_box.addWidget(self.label)
-
-        hbox_01 = QHBoxLayout()
-        hbox_01.addWidget(self.btn_haar)
-        hbox_01.addWidget(self.btn_linetracing)
-
-        hbox_02 = QHBoxLayout()
-        hbox_02.addWidget(self.btn_speed_40)
-        hbox_02.addWidget(self.btn_speed_50)
-        hbox_02.addWidget(self.btn_speed_60)
-        hbox_02.addWidget(self.btn_speed_80)
-        hbox_02.addWidget(self.btn_speed_100)
-
-        hbox_03 = QHBoxLayout()
-        hbox_03.addWidget(self.btn_stop)
-        hbox_03.addWidget(self.btn_forward)
-        hbox_03.addWidget(self.btn_backward)
-
-        hbox_04 = QHBoxLayout()
-        hbox_04.addWidget(self.btn_turn_left)
-        hbox_04.addWidget(self.btn_turn_right)
-
-        hbox_05 = QHBoxLayout()
-        hbox_05.addWidget(self.btn_left)
-        hbox_05.addWidget(self.btn_right)
-
-        vbox = QVBoxLayout()
-        vbox.addLayout(video_box)
-        vbox.addLayout(hbox_01)
-        vbox.addLayout(hbox_02)
-        vbox.addLayout(hbox_03)
-        vbox.addLayout(hbox_04)
-        vbox.addLayout(hbox_05)
-
-        box = QVBoxLayout(self.widget)
-        box.addLayout(vbox)
-    
     # Keyboard Press
     def keyPressEvent(self, event):
         key = event.key()
