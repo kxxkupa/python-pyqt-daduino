@@ -16,6 +16,8 @@ GUI 프로그램으로 버튼과 키보드 입력을 통해 아두이노 자동�
 
 ## ⚙️ 기술스택
 - Python
+- PyQt5
+- OpenCV
 - HTML
 - CSS
 - JQuery
